@@ -332,6 +332,7 @@ export const DATA_SOURCES = {
 
   // 美股数据源
   FINNHUB: 'finnhub',
+  YFINANCE: 'yfinance',
   YAHOO_FINANCE: 'yahoo_finance',
   ALPHA_VANTAGE: 'alpha_vantage',
   IEX_CLOUD: 'iex_cloud',

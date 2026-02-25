@@ -1397,6 +1397,43 @@ class ConfigService:
                         "details": None
                     }
 
+            elif ds_type == "yfinance":
+                # yfinance（Yahoo Finance Python 包）测试
+                try:
+                    import yfinance as yf
+                    data = yf.Ticker("AAPL").history(period="5d")
+                    if data is not None and not data.empty:
+                        response_time = time.time() - start_time
+                        return {
+                            "success": True,
+                            "message": "成功连接到 yfinance 数据源",
+                            "response_time": response_time,
+                            "details": {
+                                "type": ds_type,
+                                "test_result": "获取 AAPL 数据成功"
+                            }
+                        }
+                    return {
+                        "success": False,
+                        "message": "yfinance 返回数据为空",
+                        "response_time": time.time() - start_time,
+                        "details": None
+                    }
+                except ImportError:
+                    return {
+                        "success": False,
+                        "message": "yfinance 库未安装，请运行: pip install yfinance",
+                        "response_time": time.time() - start_time,
+                        "details": None
+                    }
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "message": f"yfinance 连接失败: {str(e)}",
+                        "response_time": time.time() - start_time,
+                        "details": None
+                    }
+
             elif ds_type == "yahoo_finance":
                 # Yahoo Finance 测试
                 if not ds_config.endpoint:

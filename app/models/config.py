@@ -160,6 +160,7 @@ class DataSourceType(str, Enum):
 
     # 美股数据源
     FINNHUB = "finnhub"
+    YFINANCE = "yfinance"  # Yahoo Finance Python 包，推荐用于美股，与 YAHOO_FINANCE 同源
     YAHOO_FINANCE = "yahoo_finance"
     ALPHA_VANTAGE = "alpha_vantage"
     IEX_CLOUD = "iex_cloud"

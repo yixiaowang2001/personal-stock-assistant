@@ -380,6 +380,12 @@ const dataSourceTypes = [
 
   // 美股数据源
   {
+    label: 'yfinance (Yahoo Finance)',
+    value: 'yfinance',
+    register_url: 'https://pypi.org/project/yfinance/',
+    register_guide: 'yfinance 是 Yahoo Finance 的 Python 库，免费无需 API Key，推荐用于美股。'
+  },
+  {
     label: 'Finnhub',
     value: 'finnhub',
     register_url: 'https://finnhub.io/register',

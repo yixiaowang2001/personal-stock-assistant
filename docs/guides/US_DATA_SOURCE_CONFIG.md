@@ -2,6 +2,8 @@
 
 本文档说明如何配置美股数据源（yfinance、Alpha Vantage、Finnhub）。
 
+**说明**：推荐美股使用 **yfinance**（Yahoo Finance 的 Python 库）。在配置时，`type` 可填写 `yfinance` 或 `yahoo_finance`，二者均会使用同一套 yfinance 实现；在 `datasource_groupings` 的 `data_source_name` 中填写 `yfinance` 或 `yahoo_finance` 均可被识别。
+
 ## 📊 支持的数据源
 
 ### 1. **yfinance** (推荐，免费)

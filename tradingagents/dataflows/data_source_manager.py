@@ -2401,6 +2401,9 @@ class USDataSourceManager:
             # 🔥 数据源名称映射（数据库名称 → 代码中使用的名称）
             name_mapping = {
                 'alpha vantage': 'alpha_vantage',
+                'alpha_vantage': 'alpha_vantage',
+                'yfinance': 'yfinance',
+                'yahoo_finance': 'yfinance',
                 'yahoo finance': 'yfinance',
                 'finnhub': 'finnhub',
             }

@@ -320,6 +320,16 @@ class UnifiedConfigManager:
             )
             data_sources.append(tushare_config)
 
+        # yfinance（美股推荐，无需 API Key）
+        yfinance_config = DataSourceConfig(
+            name="yfinance",
+            type=DataSourceType.YFINANCE,
+            enabled=True,
+            priority=3,
+            description="yfinance (Yahoo Finance) 美股数据，免费无需 API Key"
+        )
+        data_sources.append(yfinance_config)
+
         # 按优先级排序
         data_sources.sort(key=lambda x: x.priority, reverse=True)
         return data_sources
@@ -388,6 +398,16 @@ class UnifiedConfigManager:
             )
             data_sources.append(tushare_config)
 
+        # yfinance（美股推荐，无需 API Key）
+        yfinance_config = DataSourceConfig(
+            name="yfinance",
+            type=DataSourceType.YFINANCE,
+            enabled=True,
+            priority=3,
+            description="yfinance (Yahoo Finance) 美股数据，免费无需 API Key"
+        )
+        data_sources.append(yfinance_config)
+
         # Finnhub (如果有配置)
         if settings.get("finnhub_api_key"):
             finnhub_config = DataSourceConfig(
@@ -396,7 +416,7 @@ class UnifiedConfigManager:
                 api_key=settings.get("finnhub_api_key"),
                 endpoint="https://finnhub.io/api/v1",
                 enabled=True,
-                priority=3,
+                priority=4,
                 description="Finnhub股票数据接口"
             )
             data_sources.append(finnhub_config)
