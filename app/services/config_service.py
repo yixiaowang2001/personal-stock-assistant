@@ -1529,13 +1529,12 @@ class ConfigService:
                     # API Key 是完整的，直接使用
                     logger.info(f"✅ [TEST] Using complete API Key from config (length: {len(api_key)})")
 
-                # 测试 Alpha Vantage API
+                # 测试 Alpha Vantage API（使用免费接口 GLOBAL_QUOTE，TIME_SERIES_INTRADAY 为付费接口）
                 endpoint = ds_config.endpoint or "https://www.alphavantage.co"
                 url = f"{endpoint}/query"
                 params = {
-                    "function": "TIME_SERIES_INTRADAY",
+                    "function": "GLOBAL_QUOTE",
                     "symbol": "IBM",
-                    "interval": "5min",
                     "apikey": api_key
                 }
 
@@ -1545,7 +1544,7 @@ class ConfigService:
 
                     if response.status_code == 200:
                         data = response.json()
-                        if "Time Series (5min)" in data or "Meta Data" in data:
+                        if "Global Quote" in data:
                             response_time = time.time() - start_time
                             logger.info(f"✅ [TEST] Alpha Vantage API call successful (response time: {response_time:.2f}s)")
 
