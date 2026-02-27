@@ -292,13 +292,13 @@ const createAxiosInstance = (): AxiosInstance => {
             break
 
           case 500:
-            showErrorMessage('服务器内部错误，请稍后重试')
+            showErrorMessage(data?.detail || '服务器内部错误，请稍后重试')
             break
 
           case 502:
           case 503:
           case 504:
-            showErrorMessage('服务暂时不可用，请稍后重试')
+            showErrorMessage(data?.detail || '服务暂时不可用，请稍后重试')
             break
 
           default:

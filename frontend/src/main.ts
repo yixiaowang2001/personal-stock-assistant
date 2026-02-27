@@ -106,6 +106,24 @@ const initApp = async () => {
     console.log('🔍 检查API连接状态...')
     const apiConnected = await appStore.checkApiConnection()
 
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7929/ingest/eaa0eeff-dfa1-4f49-bd10-410e5a408edb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '979365' },
+        body: JSON.stringify({
+          sessionId: '979365',
+          runId: 'init',
+          hypothesisId: 'H1',
+          location: 'main.ts:checkApiConnection',
+          message: 'Backend health check result',
+          data: { proxyTarget: 'http://localhost:8000', apiConnected },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+    } catch (_) {}
+    // #endregion
+
     if (apiConnected) {
       console.log('✅ API连接正常，检查认证状态...')
       // 检查本地存储的认证信息（设置较短的超时时间）

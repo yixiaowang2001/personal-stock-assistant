@@ -383,6 +383,29 @@ const routes: RouteRecordRaw[] = [
   },
 
   {
+    path: '/positions',
+    name: 'Positions',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '持仓分析',
+      icon: 'TrendCharts',
+      requiresAuth: true,
+      transition: 'slide-up'
+    },
+    children: [
+      {
+        path: '',
+        name: 'PositionsHome',
+        component: () => import('@/views/Positions/index.vue'),
+        meta: {
+          title: '持仓分析',
+          requiresAuth: true
+        }
+      }
+    ]
+  },
+
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/Error/404.vue'),

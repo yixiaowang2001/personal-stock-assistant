@@ -1,6 +1,8 @@
-# 注意：此文件已弃用，请使用 pyproject.toml
-# 推荐安装方式：pip install -e .
-# 或使用 uv：uv pip install -e .
+# 注意：本项目推荐在虚拟环境中，从项目根目录执行：
+#   pip install -r requirements.txt
+# 如需使用现代依赖管理工具，也可以改为：
+#   pip install -e .
+#   或使用 uv：uv pip install -e .
 
 typing-extensions
 openai>=1.0.0,<2.0.0
