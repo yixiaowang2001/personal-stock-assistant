@@ -41,6 +41,8 @@ export interface IbkrTrade {
   quantity: number
   price: number
   amount: number | null
+  // 单笔成交的已实现盈亏（合约货币），来源于 IBKR Flex 报表
+  realized_pnl?: number | null
   report_date?: string | null
   exchange?: string | null
 }

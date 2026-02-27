@@ -153,9 +153,14 @@
         <el-table-column label="价格" width="100" align="right">
           <template #default="{ row }">{{ currencySymbol }}{{ formatPrice(row.price) }}</template>
         </el-table-column>
-        <el-table-column label="金额" width="120" align="right">
+        <el-table-column label="卖出盈亏" width="120" align="right">
           <template #default="{ row }">
-            <span v-if="row.amount != null">{{ currencySymbol }}{{ formatAmount(row.amount) }}</span>
+            <span
+              v-if="row.side === 'SELL' && row.realized_pnl != null"
+              :style="{ color: Number(row.realized_pnl) >= 0 ? '#67C23A' : '#F56C6C' }"
+            >
+              {{ currencySymbol }}{{ formatAmount(row.realized_pnl) }}
+            </span>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -238,6 +243,12 @@ function formatAmount(n: number | null | undefined) {
 function formatQuantity(n: number | undefined) {
   if (n == null || Number.isNaN(n)) return '-'
   const num = Number(n)
+  return Number.isInteger(num) ? String(num) : num.toFixed(2)
+}
+
+function formatTradeQuantity(n: number | undefined) {
+  if (n == null || Number.isNaN(n)) return '-'
+  const num = Math.abs(Number(n))
   return Number.isInteger(num) ? String(num) : num.toFixed(2)
 }
 

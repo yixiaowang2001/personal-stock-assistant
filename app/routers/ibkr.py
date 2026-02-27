@@ -193,6 +193,12 @@ async def list_trades(
     else:
         query["trade_date"] = {"$ne": "MULTI"}
 
+    # 只返回已成交：排除「卖出且 amount 为空或 0」的未成交记录（含历史误入库的）
+    query["$or"] = [
+        {"side": {"$ne": "SELL"}},
+        {"amount": {"$exists": True, "$nin": [None, 0]}},
+    ]
+
     total = await coll.count_documents(query)
     cursor = (
         coll.find(query, {"_id": 0})
@@ -201,6 +207,12 @@ async def list_trades(
         .limit(limit)
     )
     items = await cursor.to_list(None)
+
+    # 为前端展示统一处理数量为正数，方向由 side 字段表达
+    for item in items:
+        q = item.get("quantity")
+        if isinstance(q, (int, float)):
+            item["quantity"] = abs(q)
 
     return ok(
         data={

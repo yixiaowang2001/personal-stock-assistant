@@ -56,18 +56,18 @@
 2. **IBKR 历史成交入库与查询 API**（后端）
    - 在 `ibkr.py` 的 `/api/ibkr/positions/refresh` 路由中：
      - 接收 `snapshot, trades`，仍按原逻辑写入 `ibkr_positions` 集合。
-     - 新增 `ibkr_trades` 集合，入库字段包括：`user_id, symbol, side, trade_date, quantity, price, amount, currency_primary, report_date, exchange, created_at, source`。
+     - 新增 `ibkr_trades` 集合，入库字段包括：`user_id, symbol, side, trade_date, quantity, price, amount, realized_pnl, currency_primary, report_date, exchange, created_at, source`。
      - 使用 `(user_id, symbol, side, trade_date, quantity, price)` 作为幂等键，通过 `update_one(..., upsert=True)` 避免刷新多次插入重复成交。
      - 为 `ibkr_trades` 创建索引 `("user_id", 1), ("trade_date", -1)`，加速按用户与时间倒序查询。
    - 新增 `GET /api/ibkr/trades` 接口：
      - 支持参数：`symbol?`, `start_date?`, `end_date?`, `limit`, `offset`。
      - 默认按 `trade_date` 倒序返回当前用户最近成交。
      - 无论是否按日期过滤，都会强制排除 `trade_date == "MULTI"` 的跨期汇总记录。
-     - 返回结构统一为：`{ trades: [...], total: number }`。
+     - 返回结构统一为：`{ trades: [...], total: number }`，其中 `quantity` 字段已统一为绝对值，方向由 `side` 字段表示。
 
 3. **前端 API 封装与类型定义**（前端）
    - 在 `frontend/src/api/ibkr.ts` 中：
-     - 新增 `IbkrTrade` 类型：`trade_date, symbol, description, asset_class, currency_primary, side, quantity, price, amount, report_date, exchange`。
+     - 新增 `IbkrTrade` 类型：`trade_date, symbol, description, asset_class, currency_primary, side, quantity, price, amount, realized_pnl, report_date, exchange`。
      - 在 `IbkrSummary` 中加入可选字段：`ending_cash`, `ending_settled_cash`。
      - 新增 `ibkrApi.getTrades(params)`，封装 `GET /api/ibkr/trades`，返回 `{ trades, total }`。
 

@@ -446,9 +446,9 @@ def parse_trades_from_csv(csv_text: str) -> List[Dict[str, Any]]:
             val = row[idx]
             return val if val != "" else None
 
-        level = col("LevelOfDetail")
-        # 跳过各种汇总/关闭批次行，只保留真正的成交明细（例如 EXECUTION 或无 LevelOfDetail）
-        if level in {"ASSET_SUMMARY", "SYMBOL_SUMMARY", "CLOSED_LOT"}:
+        level = (col("LevelOfDetail") or "").strip().upper()
+        # 只保留“已成交”行：LevelOfDetail 为 EXECUTION/EXECUTIONS；过滤掉 Orders、汇总、Closed Lots 等
+        if level not in ("EXECUTION", "EXECUTIONS"):
             continue
 
         # 数量为 0 的记录跳过
@@ -458,6 +458,46 @@ def parse_trades_from_csv(csv_text: str) -> List[Dict[str, Any]]:
 
         price = _safe_float(col("TradePrice")) or 0.0
         amount = _safe_float(col("TradeMoney"))
+
+        # 仅保留真实成交：TradeMoney 非零（未成交/挂单常为 0 或空）
+        if amount is None or amount == 0:
+            continue
+
+        # 若报表包含 IB Execution ID 列，则只保留该列非空的行（已成交才有执行 ID）
+        id_cols = ("IB Execution ID", "IBExecutionID", "IbExecutionId")
+        if any(c in header_index for c in id_cols):
+            ib_exec_id = col("IB Execution ID") or col("IBExecutionID") or col("IbExecutionId")
+            if not (ib_exec_id and str(ib_exec_id).strip()):
+                continue
+
+        # 与 filter_ibkr_trades 一致：卖出但 Quantity 为正视为未成交（Flex 已成交卖出为负）
+        raw_side = col("Buy/Sell") or col("Side")
+        if raw_side and raw_side.strip().upper().startswith("S") and quantity > 0:
+            continue
+        # 若存在 TransactionType 列且为空，视为未成交
+        if "TransactionType" in header_index and not (col("TransactionType") or "").strip():
+            continue
+        # 若存在 IBOrderID 列且为空，视为未成交
+        for order_col in ("IBOrderID", "IB Order ID"):
+            if order_col in header_index:
+                if not (col(order_col) or "").strip():
+                    continue
+                break
+
+        # 已实现盈亏（Realized P&L），不同 Flex 模板可能使用不同列名，做兼容性解析
+        realized_pnl_raw: Optional[str] = None
+        for name in (
+            "RealizedPNL",
+            "Realized P&L",
+            "RealizedPL",
+            "Realized P/L",
+            "RealizedPnl",
+            "RealizedProfitLoss",
+        ):
+            realized_pnl_raw = col(name)
+            if realized_pnl_raw is not None:
+                break
+        realized_pnl = _safe_float(realized_pnl_raw)
 
         raw_side = col("Buy/Sell") or col("Side")
         side: Optional[str] = None
@@ -486,6 +526,7 @@ def parse_trades_from_csv(csv_text: str) -> List[Dict[str, Any]]:
             "quantity": quantity,
             "price": price,
             "amount": amount,
+            "realized_pnl": realized_pnl,
             "side": side,
             "trade_date": trade_date,
             "report_date": col("ReportDate"),
@@ -505,6 +546,18 @@ def fetch_ibkr_positions_snapshot() -> Dict[str, Any]:
     token, query_id = _get_env_credentials()
     ref_code = send_flex_request(token=token, query_id=query_id)
     statement_text = get_flex_statement(reference_code=ref_code, token=token)
+
+    # 刷新时把原始报表保存到本地，便于测试和对照 CSV 列
+    try:
+        project_root = Path(__file__).resolve().parent.parent.parent
+        save_dir = project_root / "data" / "ibkr_flex"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        save_path = save_dir / f"ibkr_flex_statement_{ts}.csv"
+        save_path.write_text(statement_text, encoding="utf-8", errors="replace")
+        logger.info("IBKR Flex 报表已保存到本地: %s", save_path)
+    except Exception as e:
+        logger.warning("保存 IBKR Flex 报表到本地失败（不影响刷新）: %s", e)
 
     # 假定 Flex Query 输出格式已配置为 CSV
     snapshot = parse_positions_from_csv(statement_text)
