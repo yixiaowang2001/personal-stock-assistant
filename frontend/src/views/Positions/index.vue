@@ -114,6 +114,12 @@
         <div class="card-header">
           <span>历史操作</span>
           <span v-if="tradesTotal">（共 {{ tradesTotal }} 笔）</span>
+          <span v-if="realizedPnlTotal != null" style="margin-left: 12px; font-size: 13px;">
+            已实现盈亏：
+            <span :style="{ color: realizedPnlTotal >= 0 ? '#67C23A' : '#F56C6C' }">
+              {{ currencySymbol }}{{ formatAmount(realizedPnlTotal) }}
+            </span>
+          </span>
         </div>
       </template>
       <div class="trades-filters">
@@ -200,6 +206,7 @@ const tradesTotal = ref(0)
 const tradePage = ref(1)
 const tradePageSize = ref(20)
 const tradeSymbol = ref('')
+const realizedPnlTotal = ref<number | null>(null)
 
 const positions = computed(() => snapshot.value?.positions ?? [])
 
@@ -281,6 +288,11 @@ async function fetchTrades() {
     if (res.success && res.data) {
       trades.value = res.data.trades || []
       tradesTotal.value = res.data.total ?? 0
+      if (typeof res.data.realized_pnl_total === 'number' && !Number.isNaN(res.data.realized_pnl_total)) {
+        realizedPnlTotal.value = res.data.realized_pnl_total
+      } else {
+        realizedPnlTotal.value = 0
+      }
     }
   } catch (e: any) {
     ElMessage.error(e?.message || '获取历史操作失败')

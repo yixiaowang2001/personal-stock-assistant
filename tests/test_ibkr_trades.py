@@ -6,6 +6,8 @@
 import os
 import sys
 
+import pytest
+
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -16,6 +18,11 @@ from app.services.ibkr_flex_service import parse_trades_from_csv
 MINIMAL_TRADES_CSV = """ClientAccountID,AccountAlias,Model,CurrencyPrimary,AssetClass,Symbol,Description,ReportDate,TradeDate,Quantity,TradePrice,TradeMoney,Buy/Sell,RealizedPNL,LevelOfDetail,ListingExchange
 U123,,,USD,STK,AAPL,APPLE INC,20260224,20260218,1,263.85,263.85,BUY,,EXECUTION,NASDAQ
 U123,,,USD,STK,AAPL,APPLE INC,20260224,20260224,-1,270.46,-270.46,SELL,6.61,EXECUTION,NASDAQ
+"""
+
+MINIMAL_TRADES_CSV_NO_REALIZED = """ClientAccountID,AccountAlias,Model,CurrencyPrimary,AssetClass,Symbol,Description,ReportDate,TradeDate,Quantity,TradePrice,TradeMoney,Buy/Sell,LevelOfDetail,ListingExchange
+U123,,,USD,STK,AAPL,APPLE INC,20260224,20260218,1,263.85,263.85,BUY,EXECUTION,NASDAQ
+U123,,,USD,STK,AAPL,APPLE INC,20260224,20260224,-1,270.46,-270.46,SELL,EXECUTION,NASDAQ
 """
 
 
@@ -41,6 +48,33 @@ def test_parse_trades_from_csv_with_realized_pnl_and_negative_quantity():
     assert sell["price"] == 270.46
     assert sell["amount"] == -270.46
     assert sell["realized_pnl"] == 6.61
+
+
+def test_parse_trades_from_csv_without_realized_pnl_column_fifo_backfill():
+    """
+    当 Trades 段没有 Realized P&L 列时，使用 FIFO 规则按价格差自动补全卖出成交的 realized_pnl。
+    """
+    trades = parse_trades_from_csv(MINIMAL_TRADES_CSV_NO_REALIZED)
+
+    assert len(trades) == 2
+
+    buy, sell = trades
+
+    assert buy["symbol"] == "AAPL"
+    assert buy["side"] == "BUY"
+    assert buy["quantity"] == 1
+    assert buy["price"] == 263.85
+    assert buy["amount"] == 263.85
+    # 买入本身不应有 realized_pnl
+    assert buy.get("realized_pnl") is None
+
+    assert sell["symbol"] == "AAPL"
+    assert sell["side"] == "SELL"
+    assert sell["quantity"] == -1
+    assert sell["price"] == 270.46
+    assert sell["amount"] == -270.46
+    # 卖出应根据 (270.46 - 263.85) * 1 计算出 6.61
+    assert pytest.approx(sell["realized_pnl"], rel=1e-6) == 6.61
 
 
 def test_parse_trades_filters_out_orders_and_non_executions():

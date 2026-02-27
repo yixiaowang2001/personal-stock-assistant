@@ -57,6 +57,9 @@ export const ibkrApi = {
   },
 
   async getTrades(params?: { symbol?: string; start_date?: string; end_date?: string; limit?: number; offset?: number }) {
-    return ApiClient.get<{ trades: IbkrTrade[]; total: number }>('/api/ibkr/trades', params)
+    return ApiClient.get<{ trades: IbkrTrade[]; total: number; realized_pnl_total?: number }>(
+      '/api/ibkr/trades',
+      params,
+    )
   },
 }

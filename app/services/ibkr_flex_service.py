@@ -397,6 +397,54 @@ def parse_positions_from_csv(csv_text: str) -> Dict[str, Any]:
     return snapshot
 
 
+def _backfill_realized_pnl_fifo(trades: List[Dict[str, Any]]) -> None:
+    """
+    当 Flex 报表 Trades 段没有提供 Realized P&L 列时，
+    基于逐笔成交价格和数量，按符号（symbol）维度使用 FIFO 规则补全卖出成交的已实现盈亏。
+    """
+    # key: (symbol, currency_primary)
+    positions: Dict[Tuple[str, str], List[Dict[str, float]]] = {}
+
+    for trade in trades:
+        symbol = (trade.get("symbol") or "").strip()
+        currency = (trade.get("currency_primary") or "").strip()
+        if not symbol:
+            continue
+        key = (symbol, currency)
+
+        side = trade.get("side")
+        qty_raw = trade.get("quantity")
+        price_raw = trade.get("price")
+        if not isinstance(qty_raw, (int, float)) or not isinstance(price_raw, (int, float)):
+            continue
+
+        qty = float(qty_raw)
+        price = float(price_raw)
+        lots = positions.setdefault(key, [])
+
+        # Flex 中 BUY 数量通常为正，SELL 为负
+        if side == "BUY" and qty > 0:
+            lots.append({"qty": qty, "price": price})
+        elif side == "SELL" and qty < 0:
+            remaining = abs(qty)
+            realized = 0.0
+
+            # 使用 FIFO 将卖出数量与历史买入逐笔配对
+            while remaining > 0 and lots:
+                lot = lots[0]
+                match_qty = min(remaining, lot["qty"])
+                realized += (price - lot["price"]) * match_qty
+                lot["qty"] -= match_qty
+                remaining -= match_qty
+                if lot["qty"] <= 0:
+                    lots.pop(0)
+
+            # 若本条成交此前未提供 realized_pnl，且确实产生了配对数量，则写入补全值
+            if trade.get("realized_pnl") is None and abs(realized) > 0:
+                # 保留两位小数以对齐报表常见格式
+                trade["realized_pnl"] = round(realized, 2)
+
+
 def parse_trades_from_csv(csv_text: str) -> List[Dict[str, Any]]:
     """
     从 IBKR Flex CSV 报表中解析历史成交记录（Trades 段）。
@@ -533,6 +581,10 @@ def parse_trades_from_csv(csv_text: str) -> List[Dict[str, Any]]:
             "exchange": col("ListingExchange") or col("Exchange"),
         }
         trades.append(trade)
+
+    # 若 Flex 报表本身未提供 Realized P&L 列或对应单元格为空，
+    # 使用 FIFO 规则在内存中补全卖出成交的已实现盈亏。
+    _backfill_realized_pnl_fifo(trades)
 
     return trades
 

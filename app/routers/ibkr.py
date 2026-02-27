@@ -143,10 +143,15 @@ async def refresh_positions(
             trade_doc: Dict[str, Any] = {
                 **t,
                 "user_id": user_id,
-                "created_at": now,
                 "source": "ibkr_flex",
             }
-            await trades_coll.update_one(filter_doc, {"$setOnInsert": trade_doc}, upsert=True)
+            update_doc: Dict[str, Any] = {
+                # 更新或补全解析得到的字段（包括 realized_pnl）
+                "$set": trade_doc,
+                # 仅在首次插入时写入 created_at，避免每次刷新都重置创建时间
+                "$setOnInsert": {"created_at": now},
+            }
+            await trades_coll.update_one(filter_doc, update_doc, upsert=True)
 
     payload = {
         "as_of_date": doc["as_of_date"],
@@ -214,9 +219,38 @@ async def list_trades(
         if isinstance(q, (int, float)):
             item["quantity"] = abs(q)
 
+    # 计算当前筛选条件下所有有效卖出成交的已实现盈亏合计（realized_pnl_total）
+    realized_pnl_total = 0.0
+    try:
+        pnl_match: Dict[str, Any] = {
+            "user_id": user_id,
+            "side": "SELL",
+            "trade_date": query.get("trade_date"),
+        }
+        if symbol:
+            pnl_match["symbol"] = symbol
+        # 仅保留已成交卖出记录：amount 存在且非 0
+        pnl_match["amount"] = {"$exists": True, "$nin": [None, 0]}
+        # 仅统计有已实现盈亏字段的记录
+        pnl_match["realized_pnl"] = {"$exists": True, "$ne": None}
+
+        pipeline = [
+            {"$match": pnl_match},
+            {"$group": {"_id": None, "total": {"$sum": "$realized_pnl"}}},
+        ]
+        agg_cursor = coll.aggregate(pipeline)
+        agg_docs = await agg_cursor.to_list(1)
+        if agg_docs:
+            total_val = agg_docs[0].get("total")
+            if isinstance(total_val, (int, float)):
+                realized_pnl_total = float(total_val)
+    except Exception as e:
+        logger.warning("统计 realized_pnl_total 失败: %s", e)
+
     return ok(
         data={
             "trades": items,
             "total": total,
+            "realized_pnl_total": realized_pnl_total,
         }
     )
