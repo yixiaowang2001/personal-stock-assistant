@@ -32,169 +32,471 @@
       </div>
     </el-alert>
 
-    <el-card v-if="snapshot?.as_of_date || snapshot?.summary" class="summary-card" shadow="never">
-      <template #header>
-        <span>持仓摘要</span>
-      </template>
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="报表日期">{{ snapshot?.as_of_date ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="基准货币">{{ snapshot?.base_currency ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="持仓市值">
-          <span v-if="summaryTotalValue != null">{{ currencySymbol }}{{ formatAmount(summaryTotalValue) }}</span>
-          <span v-else>-</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="未实现盈亏">
-          <span
-            v-if="summaryTotalPnl != null"
-            :style="{ color: summaryTotalPnl >= 0 ? '#67C23A' : '#F56C6C' }"
-          >
-            {{ currencySymbol }}{{ formatAmount(summaryTotalPnl) }}
-          </span>
-          <span v-else>-</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="可用资金（期末结算现金）">
-          <span v-if="summaryCash != null">{{ currencySymbol }}{{ formatAmount(summaryCash) }}</span>
-          <span v-else>-</span>
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
+    <el-card class="tabs-card" shadow="never">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="持仓信息" name="info">
+          <el-card v-if="snapshot?.as_of_date || snapshot?.summary" class="summary-card" shadow="never">
+            <template #header>
+              <span>持仓摘要</span>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="报表日期">{{ snapshot?.as_of_date ?? '-' }}</el-descriptions-item>
+              <el-descriptions-item label="基准货币">{{ snapshot?.base_currency ?? '-' }}</el-descriptions-item>
+              <el-descriptions-item label="持仓市值">
+                <span v-if="summaryTotalValue != null">{{ currencySymbol }}{{ formatAmount(summaryTotalValue) }}</span>
+                <span v-else>-</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="未实现盈亏">
+                <span
+                  v-if="summaryTotalPnl != null"
+                  :style="{ color: summaryTotalPnl >= 0 ? '#67C23A' : '#F56C6C' }"
+                >
+                  {{ currencySymbol }}{{ formatAmount(summaryTotalPnl) }}
+                </span>
+                <span v-else>-</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="可用资金（期末结算现金）">
+                <span v-if="summaryCash != null">{{ currencySymbol }}{{ formatAmount(summaryCash) }}</span>
+                <span v-else>-</span>
+              </el-descriptions-item>
+            </el-descriptions>
+          </el-card>
 
-    <el-card class="positions-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span>持仓列表</span>
-          <span v-if="positions.length" class="count">({{ positions.length }} 个)</span>
-        </div>
-      </template>
-      <el-table :data="positions" v-loading="loading" stripe style="width: 100%">
-        <el-table-column label="代码" width="100">
-          <template #default="{ row }">
-            <el-link type="primary" @click="viewStock(row.symbol)">{{ row.symbol }}</el-link>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="名称" min-width="140" show-overflow-tooltip />
-        <el-table-column label="数量" width="90" align="right">
-          <template #default="{ row }">{{ formatQuantity(row.quantity) }}</template>
-        </el-table-column>
-        <el-table-column label="市价" width="100" align="right">
-          <template #default="{ row }">{{ currencySymbol }}{{ formatPrice(row.mark_price) }}</template>
-        </el-table-column>
-        <el-table-column label="持仓市值" width="120" align="right">
-          <template #default="{ row }">{{ currencySymbol }}{{ formatAmount(row.position_value) }}</template>
-        </el-table-column>
-        <el-table-column label="成本价" width="100" align="right">
-          <template #default="{ row }">
-            <span v-if="row.avg_cost != null">{{ currencySymbol }}{{ formatPrice(row.avg_cost) }}</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="未实现盈亏" width="120" align="right">
-          <template #default="{ row }">
-            <span
-              v-if="row.unrealized_pnl != null"
-              :style="{ color: row.unrealized_pnl >= 0 ? '#67C23A' : '#F56C6C' }"
+          <el-card class="positions-card" shadow="never">
+            <template #header>
+              <div class="card-header">
+                <span>持仓列表</span>
+                <span v-if="positions.length" class="count">({{ positions.length }} 个)</span>
+              </div>
+            </template>
+            <el-table :data="positions" v-loading="loading" stripe style="width: 100%">
+              <el-table-column label="代码" width="100">
+                <template #default="{ row }">
+                  <el-link type="primary" @click="viewStock(row.symbol)">{{ row.symbol }}</el-link>
+                </template>
+              </el-table-column>
+              <el-table-column prop="description" label="名称" min-width="140" show-overflow-tooltip />
+              <el-table-column label="数量" width="90" align="right">
+                <template #default="{ row }">{{ formatQuantity(row.quantity) }}</template>
+              </el-table-column>
+              <el-table-column label="市价" width="100" align="right">
+                <template #default="{ row }">{{ currencySymbol }}{{ formatPrice(row.mark_price) }}</template>
+              </el-table-column>
+              <el-table-column label="持仓市值" width="120" align="right">
+                <template #default="{ row }">{{ currencySymbol }}{{ formatAmount(row.position_value) }}</template>
+              </el-table-column>
+              <el-table-column label="成本价" width="100" align="right">
+                <template #default="{ row }">
+                  <span v-if="row.avg_cost != null">{{ currencySymbol }}{{ formatPrice(row.avg_cost) }}</span>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="未实现盈亏" width="120" align="right">
+                <template #default="{ row }">
+                  <span
+                    v-if="row.unrealized_pnl != null"
+                    :style="{ color: row.unrealized_pnl >= 0 ? '#67C23A' : '#F56C6C' }"
+                  >
+                    {{ currencySymbol }}{{ formatAmount(row.unrealized_pnl) }}
+                  </span>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="currency_primary" label="货币" width="80" />
+            </el-table>
+
+            <div v-if="!loading && positions.length === 0" class="empty-state">
+              <el-empty :description="emptyMessage">
+                <el-button type="primary" @click="onRefresh">点击刷新获取持仓</el-button>
+              </el-empty>
+            </div>
+          </el-card>
+
+          <el-card class="trades-card" shadow="never" style="margin-top: 16px;">
+            <template #header>
+              <div class="card-header">
+                <span>历史操作</span>
+                <span v-if="tradesTotal">（共 {{ tradesTotal }} 笔）</span>
+                <span v-if="realizedPnlTotal != null" style="margin-left: 12px; font-size: 13px;">
+                  已实现盈亏：
+                  <span :style="{ color: realizedPnlTotal >= 0 ? '#67C23A' : '#F56C6C' }">
+                    {{ currencySymbol }}{{ formatAmount(realizedPnlTotal) }}
+                  </span>
+                </span>
+              </div>
+            </template>
+            <div class="trades-filters">
+              <el-input
+                v-model="tradeSymbol"
+                placeholder="按代码过滤，如 AAPL"
+                size="small"
+                style="width: 200px; margin-right: 8px;"
+                clearable
+              />
+              <el-button size="small" @click="reloadTrades">查询</el-button>
+            </div>
+            <el-table
+              :data="trades"
+              v-loading="tradesLoading"
+              stripe
+              style="width: 100%; margin-top: 8px;"
+              size="small"
             >
-              {{ currencySymbol }}{{ formatAmount(row.unrealized_pnl) }}
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="currency_primary" label="货币" width="80" />
-      </el-table>
+              <el-table-column prop="trade_date" label="日期" width="110" />
+              <el-table-column label="代码" width="100">
+                <template #default="{ row }">
+                  <el-link type="primary" @click="viewStock(row.symbol)">{{ row.symbol }}</el-link>
+                </template>
+              </el-table-column>
+              <el-table-column prop="description" label="名称" min-width="140" show-overflow-tooltip />
+              <el-table-column label="方向" width="80">
+                <template #default="{ row }">
+                  <span :style="{ color: row.side === 'BUY' ? '#67C23A' : row.side === 'SELL' ? '#F56C6C' : '#909399' }">
+                    {{ row.side === 'BUY' ? '买入' : row.side === 'SELL' ? '卖出' : '-' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column label="数量" width="90" align="right">
+                <template #default="{ row }">{{ formatQuantity(row.quantity) }}</template>
+              </el-table-column>
+              <el-table-column label="价格" width="100" align="right">
+                <template #default="{ row }">{{ currencySymbol }}{{ formatPrice(row.price) }}</template>
+              </el-table-column>
+              <el-table-column label="卖出盈亏" width="120" align="right">
+                <template #default="{ row }">
+                  <span
+                    v-if="row.side === 'SELL' && row.realized_pnl != null"
+                    :style="{ color: Number(row.realized_pnl) >= 0 ? '#67C23A' : '#F56C6C' }"
+                  >
+                    {{ currencySymbol }}{{ formatAmount(row.realized_pnl) }}
+                  </span>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-if="tradesTotal > tradePageSize" style="margin-top: 8px; text-align: right;">
+              <el-pagination
+                background
+                layout="prev, pager, next"
+                :total="tradesTotal"
+                :page-size="tradePageSize"
+                :current-page="tradePage"
+                @current-change="onTradePageChange"
+                small
+              />
+            </div>
+          </el-card>
+        </el-tab-pane>
 
-      <div v-if="!loading && positions.length === 0" class="empty-state">
-        <el-empty :description="emptyMessage">
-          <el-button type="primary" @click="onRefresh">点击刷新获取持仓</el-button>
-        </el-empty>
-      </div>
-    </el-card>
-
-    <el-card class="trades-card" shadow="never" style="margin-top: 16px;">
-      <template #header>
-        <div class="card-header">
-          <span>历史操作</span>
-          <span v-if="tradesTotal">（共 {{ tradesTotal }} 笔）</span>
-          <span v-if="realizedPnlTotal != null" style="margin-left: 12px; font-size: 13px;">
-            已实现盈亏：
-            <span :style="{ color: realizedPnlTotal >= 0 ? '#67C23A' : '#F56C6C' }">
-              {{ currencySymbol }}{{ formatAmount(realizedPnlTotal) }}
-            </span>
-          </span>
-        </div>
-      </template>
-      <div class="trades-filters">
-        <el-input
-          v-model="tradeSymbol"
-          placeholder="按代码过滤，如 AAPL"
-          size="small"
-          style="width: 200px; margin-right: 8px;"
-          clearable
-        />
-        <el-button size="small" @click="reloadTrades">查询</el-button>
-      </div>
-      <el-table
-        :data="trades"
-        v-loading="tradesLoading"
-        stripe
-        style="width: 100%; margin-top: 8px;"
-        size="small"
-      >
-        <el-table-column prop="trade_date" label="日期" width="110" />
-        <el-table-column label="代码" width="100">
-          <template #default="{ row }">
-            <el-link type="primary" @click="viewStock(row.symbol)">{{ row.symbol }}</el-link>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="名称" min-width="140" show-overflow-tooltip />
-        <el-table-column label="方向" width="80">
-          <template #default="{ row }">
-            <span :style="{ color: row.side === 'BUY' ? '#67C23A' : row.side === 'SELL' ? '#F56C6C' : '#909399' }">
-              {{ row.side === 'BUY' ? '买入' : row.side === 'SELL' ? '卖出' : '-' }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="数量" width="90" align="right">
-          <template #default="{ row }">{{ formatQuantity(row.quantity) }}</template>
-        </el-table-column>
-        <el-table-column label="价格" width="100" align="right">
-          <template #default="{ row }">{{ currencySymbol }}{{ formatPrice(row.price) }}</template>
-        </el-table-column>
-        <el-table-column label="卖出盈亏" width="120" align="right">
-          <template #default="{ row }">
-            <span
-              v-if="row.side === 'SELL' && row.realized_pnl != null"
-              :style="{ color: Number(row.realized_pnl) >= 0 ? '#67C23A' : '#F56C6C' }"
+        <el-tab-pane label="持仓推荐" name="recommend">
+          <div class="recommend-tab">
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              class="recommend-alert"
             >
-              {{ currencySymbol }}{{ formatAmount(row.realized_pnl) }}
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="tradesTotal > tradePageSize" style="margin-top: 8px; text-align: right;">
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :total="tradesTotal"
-          :page-size="tradePageSize"
-          :current-page="tradePage"
-          @current-change="onTradePageChange"
-          small
-        />
-      </div>
+              <template #title>
+                基于 IBKR 持仓与已完成报告的组合级别推荐
+              </template>
+              <div class="recommend-desc">
+                <p>步骤 1：选择本次用于生成持仓推荐的大模型。</p>
+                <p>步骤 2：按需选择最多 10 份已完成的股票分析报告（同一股票代码仅可选择 1 份，可选步骤）。</p>
+                <p>步骤 3：点击“生成持仓推荐”，系统会结合当前 IBKR 持仓与可用资金，给出组合层面和个股层面的综合建议。</p>
+                <p>说明：本功能仅使用 IBKR 持仓快照和报告摘要，不包含历史成交，不构成投资建议，仅供个人复盘与记录。</p>
+              </div>
+            </el-alert>
+
+            <el-card class="reports-select-card" shadow="never">
+              <div class="settings-body">
+                <div class="model-row">
+                  <div class="model-label">选择模型</div>
+                  <div class="model-control">
+                    <el-select
+                      v-model="selectedModel"
+                      size="small"
+                      class="model-select"
+                      placeholder="选择持仓推荐模型"
+                      filterable
+                      :disabled="!availableModels.length"
+                    >
+                      <el-option
+                        v-for="model in availableModels"
+                        :key="model.model_name"
+                        :label="model.model_display_name || model.model_name"
+                        :value="model.model_name"
+                      >
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                          <span style="flex:1;">{{ model.model_display_name || model.model_name }}</span>
+                          <div style="display:flex;align-items:center;gap:4px;">
+                            <el-tag
+                              v-if="model.capability_level"
+                              :type="getCapabilityTagType(model.capability_level)"
+                              size="small"
+                              effect="plain"
+                            >
+                              {{ getCapabilityText(model.capability_level) }}
+                            </el-tag>
+                            <span style="font-size:12px;color:#909399;">{{ model.provider }}</span>
+                          </div>
+                        </div>
+                      </el-option>
+                    </el-select>
+                  </div>
+                </div>
+
+                <el-collapse v-model="reportsCollapseActive" class="reports-collapse">
+                  <el-collapse-item name="reports">
+                    <template #title>
+                      <div class="collapse-header">
+                        <span>选择报告（可选，最多 10 份，以下仅展示已完成的单股分析报告）</span>
+                        <span class="count-text">已选 {{ selectedReports.length }} / 10</span>
+                      </div>
+                    </template>
+
+                <div class="reports-filters">
+                  <el-button
+                    size="small"
+                    :type="filterTodayOnly ? 'primary' : 'default'"
+                    @click="onToggleTodayFilter"
+                  >
+                    今天
+                  </el-button>
+                      <el-input
+                        v-model="reportSearchKeyword"
+                        placeholder="搜索股票代码或名称"
+                        clearable
+                        size="small"
+                        class="filter-item"
+                        @change="onReportFilterChange"
+                        @clear="onReportFilterChange"
+                      >
+                        <template #prefix>
+                          <el-icon><TrendCharts /></el-icon>
+                        </template>
+                      </el-input>
+                      <el-select
+                        v-model="reportMarketFilter"
+                        placeholder="市场筛选"
+                        clearable
+                        size="small"
+                        class="filter-item"
+                        @change="onReportFilterChange"
+                      >
+                        <el-option label="A股" value="A股" />
+                        <el-option label="港股" value="港股" />
+                        <el-option label="美股" value="美股" />
+                      </el-select>
+                    </div>
+
+                    <el-table
+                      ref="reportTableRef"
+                      :data="filteredReports"
+                      v-loading="reportsLoading"
+                      style="width: 100%;"
+                      size="small"
+                      @select="onReportRowSelect"
+                      @selection-change="onReportSelectionChange"
+                    >
+                      <el-table-column type="selection" width="50" />
+                      <el-table-column prop="stock_code" label="代码" width="110">
+                        <template #default="{ row }">
+                          <span>{{ row.stock_code }}</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="stock_name" label="名称" width="140" show-overflow-tooltip />
+                      <el-table-column prop="market_type" label="市场" width="80">
+                        <template #default="{ row }">
+                          <el-tag size="small" type="success" v-if="row.market_type === 'A股'">A股</el-tag>
+                          <el-tag size="small" type="warning" v-else-if="row.market_type === '港股'">港股</el-tag>
+                          <el-tag size="small" type="info" v-else-if="row.market_type === '美股'">美股</el-tag>
+                          <el-tag size="small" v-else>{{ row.market_type || '-' }}</el-tag>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="created_at" label="创建时间" width="170">
+                        <template #default="{ row }">
+                          {{ formatReportTime(row.created_at) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="model_info" label="模型" width="160">
+                        <template #default="{ row }">
+                          <el-tag v-if="row.model_info && row.model_info !== 'Unknown'" size="small" type="info">
+                            {{ row.model_info }}
+                          </el-tag>
+                          <span v-else class="text-muted">-</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="summary" label="摘要" min-width="260" show-overflow-tooltip>
+                        <template #default="{ row }">
+                          <span>{{ row.summary || '（暂无摘要）' }}</span>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+
+                    <div class="pagination-wrapper" v-if="reportTotal > reportPageSize">
+                      <el-pagination
+                        v-model:current-page="reportPage"
+                        v-model:page-size="reportPageSize"
+                        :page-sizes="[10, 20, 50, 100]"
+                        :total="reportTotal"
+                        layout="total, sizes, prev, pager, next, jumper"
+                        @size-change="onReportPageSizeChange"
+                        @current-change="onReportPageChange"
+                      />
+                    </div>
+                  </el-collapse-item>
+                </el-collapse>
+
+                <div class="generate-row">
+                  <el-button
+                    type="primary"
+                    :disabled="selectedReports.length === 0 || generating"
+                    :loading="generating"
+                    @click="onGenerateRecommendations"
+                  >
+                    生成持仓推荐
+                  </el-button>
+                </div>
+              </div>
+            </el-card>
+
+            <el-card class="recommend-result-card" shadow="never">
+              <template #header>
+                <div class="card-header">
+                  <span>持仓推荐</span>
+                  <span class="sub-text" v-if="recommendationResult">
+                    报表日期：{{ recommendationResult.as_of_date || snapshot?.as_of_date || '-' }}，
+                    基准货币：{{ recommendationResult.base_currency || snapshot?.base_currency || '-' }}
+                    <template v-if="displayModelName">
+                      ，使用模型：{{ displayModelName }}
+                    </template>
+                  </span>
+                </div>
+              </template>
+
+              <div v-if="!recommendationResult">
+                <el-empty description="请选择上方报告并点击“生成推荐”获取结果" />
+              </div>
+              <div v-else>
+                <div v-if="recommendationResult.overall_comment" class="overall-comment">
+                  <div class="overall-title">组合层面说明</div>
+                  <div class="overall-text">
+                    {{ recommendationResult.overall_comment }}
+                  </div>
+                </div>
+
+                <div v-if="recommendationResult.evaluation_summary" class="evaluation-summary">
+                  <div class="evaluation-title">综合评估建议</div>
+                  <div class="evaluation-text">
+                    {{ recommendationResult.evaluation_summary }}
+                  </div>
+                </div>
+
+                <el-table
+                  :data="recommendationRows"
+                  size="small"
+                  style="width: 100%; margin-top: 8px;"
+                  @row-click="onRecommendationRowClick"
+                >
+                  <el-table-column prop="stock_symbol" label="代码" width="110" />
+                  <el-table-column prop="stock_name" label="名称" width="140" show-overflow-tooltip />
+                  <el-table-column label="当前持仓" width="180">
+                    <template #default="{ row }">
+                      <span v-if="row.currentPosition">
+                        {{ formatQuantity(row.currentPosition.quantity) }} 股 /
+                        {{ currencySymbol }}{{ formatAmount(row.currentPosition.position_value) }}
+                      </span>
+                      <span v-else class="text-muted">当前无持仓</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作建议" width="140">
+                    <template #default="{ row }">
+                      <el-tag :type="getActionTagType(row.action)" size="small">
+                        {{ formatActionText(row.action) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="target_position_percent" label="目标仓位" width="120">
+                    <template #default="{ row }">
+                      <span v-if="row.target_position_percent != null">
+                        {{ (row.target_position_percent * 100).toFixed(1) }}%
+                      </span>
+                      <span v-else class="text-muted">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="suggested_trade_shares" label="建议股数" width="110">
+                    <template #default="{ row }">
+                      <span v-if="row.suggested_trade_shares != null">
+                        {{ formatQuantity(row.suggested_trade_shares) }}
+                      </span>
+                      <span v-else class="text-muted">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="rationale" label="理由" min-width="260" show-overflow-tooltip />
+                  <el-table-column prop="risk_note" label="风险提示" min-width="220" show-overflow-tooltip />
+                </el-table>
+
+                <div v-if="activeRecommendation" class="recommend-detail-card">
+                  <el-card shadow="never">
+                    <template #header>
+                      <div class="detail-header">
+                        <span class="detail-title">
+                          {{ activeRecommendation.stock_symbol }}
+                          <span v-if="activeRecommendation.stock_name" class="detail-name">
+                            - {{ activeRecommendation.stock_name }}
+                          </span>
+                        </span>
+                        <el-tag :type="getActionTagType(activeRecommendation.action)" size="small">
+                          {{ formatActionText(activeRecommendation.action) }}
+                        </el-tag>
+                      </div>
+                    </template>
+                    <div class="detail-body">
+                      <div class="detail-section">
+                        <div class="detail-section-title">操作原因</div>
+                        <div class="detail-section-content">
+                          <span v-if="activeRecommendation.rationale">
+                            {{ activeRecommendation.rationale }}
+                          </span>
+                          <span v-else class="text-muted">暂无详细原因。</span>
+                        </div>
+                      </div>
+                      <div class="detail-section">
+                        <div class="detail-section-title">风险提示</div>
+                        <div class="detail-section-content">
+                          <span v-if="activeRecommendation.risk_note">
+                            {{ activeRecommendation.risk_note }}
+                          </span>
+                          <span v-else class="text-muted">暂无额外风险说明。</span>
+                        </div>
+                      </div>
+                    </div>
+                  </el-card>
+                </div>
+              </div>
+            </el-card>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { TrendCharts, Refresh } from '@element-plus/icons-vue'
+import { useAuthStore } from '@/stores/auth'
 import { ibkrApi } from '@/api/ibkr'
 import type { IbkrPositionSnapshot, IbkrTrade } from '@/api/ibkr'
+import { portfolioApi } from '@/api/portfolio'
+import { configApi } from '@/api/config'
 
 const router = useRouter()
+const authStore = useAuthStore()
+
+const activeTab = ref<'info' | 'recommend'>('info')
 
 const snapshot = ref<IbkrPositionSnapshot | null>(null)
 const loading = ref(false)
@@ -236,6 +538,299 @@ const emptyMessage = computed(() => {
   if (snapshot.value?.message) return snapshot.value.message
   return '暂无持仓，请先在 IBKR 中建仓并点击右上角刷新按钮'
 })
+
+// 持仓推荐：报告选择与推荐结果
+const reportTableRef = ref<any>(null)
+const reportsLoading = ref(false)
+const reportSearchKeyword = ref('')
+const reportMarketFilter = ref('')
+const reportPage = ref(1)
+const reportPageSize = ref(10)
+const reportTotal = ref(0)
+const availableReports = ref<any[]>([])
+const selectedReports = ref<any[]>([])
+const reportsLoaded = ref(false)
+const reportsCollapseActive = ref<string[]>(['reports'])
+const filterTodayOnly = ref(false)
+
+// 持仓推荐：模型选择
+const availableModels = ref<any[]>([])
+const selectedModel = ref<string>('')
+const modelsLoaded = ref(false)
+
+const generating = ref(false)
+const recommendationResult = ref<any | null>(null)
+const activeRecommendation = ref<any | null>(null)
+
+const recommendationRows = computed(() => {
+  if (!recommendationResult.value) return []
+  const bySymbol: Record<string, any> = {}
+  for (const p of positions.value) {
+    if (p && p.symbol) {
+      bySymbol[p.symbol] = p
+    }
+  }
+  return (recommendationResult.value.recommendations || []).map((item: any) => {
+    const symbol = item.stock_symbol
+    return {
+      ...item,
+      currentPosition: bySymbol[symbol] || null,
+    }
+  })
+})
+
+const filteredReports = computed(() => {
+  if (!filterTodayOnly.value) return availableReports.value
+  const today = new Date()
+  const y = today.getFullYear()
+  const m = String(today.getMonth() + 1).padStart(2, '0')
+  const d = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${y}-${m}-${d}`
+  return availableReports.value.filter((r: any) => {
+    const created = r?.created_at
+    if (!created) return false
+    try {
+      const dt = new Date(created)
+      if (Number.isNaN(dt.getTime())) return false
+      const yy = dt.getFullYear()
+      const mm = String(dt.getMonth() + 1).padStart(2, '0')
+      const dd = String(dt.getDate()).padStart(2, '0')
+      return `${yy}-${mm}-${dd}` === todayStr
+    } catch {
+      return false
+    }
+  })
+})
+
+const displayModelName = computed(() => {
+  if (recommendationResult.value?.used_model) {
+    return recommendationResult.value.used_model
+  }
+  if (selectedModel.value) {
+    return selectedModel.value
+  }
+  return ''
+})
+
+function onRecommendationRowClick(row: any) {
+  activeRecommendation.value = row
+}
+
+async function fetchCompletedReports() {
+  try {
+    reportsLoading.value = true
+    const params = new URLSearchParams({
+      page: reportPage.value.toString(),
+      page_size: reportPageSize.value.toString(),
+    })
+    if (reportSearchKeyword.value) {
+      params.append('search_keyword', reportSearchKeyword.value)
+    }
+    if (reportMarketFilter.value) {
+      params.append('market_filter', reportMarketFilter.value)
+    }
+
+    const response = await fetch(`/api/reports/list?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${authStore.token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
+    const result = await response.json()
+    if (result.success) {
+      const list = Array.isArray(result.data?.reports) ? result.data.reports : []
+      // 仅保留已完成的报告
+      availableReports.value = list.filter((r: any) => r.status === 'completed')
+      reportTotal.value = result.data?.total ?? availableReports.value.length
+      reportsLoaded.value = true
+    } else {
+      throw new Error(result.message || '获取报告列表失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message || '获取报告列表失败')
+  } finally {
+    reportsLoading.value = false
+  }
+}
+
+function onReportFilterChange() {
+  reportPage.value = 1
+  fetchCompletedReports()
+}
+
+function onReportPageSizeChange(size: number) {
+  reportPageSize.value = size
+  reportPage.value = 1
+  fetchCompletedReports()
+}
+
+function onReportPageChange(page: number) {
+  reportPage.value = page
+  fetchCompletedReports()
+}
+
+function onToggleTodayFilter() {
+  filterTodayOnly.value = !filterTodayOnly.value
+}
+
+function onReportSelectionChange(selection: any[]) {
+  selectedReports.value = selection
+}
+
+function onReportRowSelect(selection: any[], row: any) {
+  const isSelected = selection.some((item) => item.id === row.id)
+  if (!isSelected) {
+    selectedReports.value = selection
+    return
+  }
+
+  if (selection.length > 10) {
+    ElMessage.warning('最多只能选择 10 份报告')
+    if (reportTableRef.value) {
+      reportTableRef.value.toggleRowSelection(row, false)
+    }
+    return
+  }
+
+  const symbol = row.stock_code || row.stock_symbol
+  if (symbol) {
+    const hasDuplicate = selection.some(
+      (item) =>
+        (item.stock_code || item.stock_symbol) === symbol && item.id !== row.id,
+    )
+    if (hasDuplicate) {
+      ElMessage.warning('同一股票代码只能选择一份报告')
+      if (reportTableRef.value) {
+        reportTableRef.value.toggleRowSelection(row, false)
+      }
+      return
+    }
+  }
+
+  selectedReports.value = selection
+}
+
+function formatReportTime(time: string | null | undefined) {
+  if (!time) return '-'
+  try {
+    const d = new Date(time)
+    if (Number.isNaN(d.getTime())) return time
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${day} ${hh}:${mm}`
+  } catch {
+    return time
+  }
+}
+
+function formatActionText(action: string | null | undefined) {
+  const a = (action || '').toLowerCase()
+  if (a === 'increase' || a === 'buy' || a === 'add') return '增持'
+  if (a === 'decrease' || a === 'reduce') return '减持'
+  if (a === 'exit' || a === 'close') return '清仓'
+  if (a === 'avoid') return '暂不参与'
+  if (a === 'hold' || !a) return '观望/持有'
+  return action || '观望/持有'
+}
+
+function getActionTagType(action: string | null | undefined) {
+  const a = (action || '').toLowerCase()
+  if (a === 'increase' || a === 'buy' || a === 'add') return 'success'
+  if (a === 'decrease' || a === 'reduce') return 'warning'
+  if (a === 'exit' || a === 'close') return 'danger'
+  if (a === 'avoid') return 'info'
+  return 'info'
+}
+
+function getCapabilityText(level: number): string {
+  const texts: Record<number, string> = {
+    1: '⚡基础',
+    2: '📊标准',
+    3: '🎯高级',
+    4: '🔥专业',
+    5: '👑旗舰',
+  }
+  return texts[level] || '📊标准'
+}
+
+function getCapabilityTagType(level: number): 'success' | 'info' | 'warning' | 'danger' {
+  if (level >= 4) return 'danger'
+  if (level >= 3) return 'warning'
+  if (level >= 2) return 'success'
+  return 'info'
+}
+
+async function onGenerateRecommendations() {
+  if (!selectedReports.value.length) {
+    ElMessage.warning('请先选择至少 1 份报告')
+    return
+  }
+
+  const ids = selectedReports.value.map((r: any) => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.error('选中的报告缺少有效 ID')
+    return
+  }
+
+  try {
+    generating.value = true
+    const res = await portfolioApi.generateRecommendations(ids, selectedModel.value || undefined)
+    if (res.success && res.data) {
+      recommendationResult.value = res.data
+      activeRecommendation.value = null
+      ElMessage.success('持仓推荐生成成功')
+    } else {
+      throw new Error(res.message || '生成持仓推荐失败')
+    }
+  } catch (e: any) {
+    const msg = e?.message || '生成持仓推荐失败'
+    ElMessage.error(msg)
+  } finally {
+    generating.value = false
+  }
+}
+
+watch(
+  () => activeTab.value,
+  (val) => {
+    if (val === 'recommend' && !reportsLoaded.value && !reportsLoading.value) {
+      fetchCompletedReports()
+    }
+    if (val === 'recommend' && !modelsLoaded.value) {
+      initializePortfolioModels()
+    }
+  },
+)
+
+async function initializePortfolioModels() {
+  try {
+    modelsLoaded.value = true
+    const [defaults, llmConfigs] = await Promise.all([
+      configApi.getDefaultModels(),
+      configApi.getLLMConfigs(),
+    ])
+    const enabledModels = (llmConfigs || []).filter((m: any) => m && m.enabled)
+    availableModels.value = enabledModels
+    if (!selectedModel.value && defaults?.quick_analysis_model) {
+      selectedModel.value = defaults.quick_analysis_model
+    } else if (!selectedModel.value && enabledModels.length) {
+      selectedModel.value = enabledModels[0].model_name
+    }
+  } catch (e: any) {
+    modelsLoaded.value = false
+    // 静默失败，仅在控制台记录，避免影响持仓推荐主体功能
+    // eslint-disable-next-line no-console
+    console.error('加载持仓推荐模型配置失败', e)
+  }
+}
 
 function formatPrice(n: number | null | undefined) {
   if (n == null || Number.isNaN(n)) return '-'
@@ -371,6 +966,10 @@ onMounted(() => {
     margin-bottom: 16px;
   }
 
+  .tabs-card {
+    margin-top: 0;
+  }
+
   .positions-card {
     .card-header .count {
       margin-left: 8px;
@@ -391,6 +990,171 @@ onMounted(() => {
       align-items: center;
       justify-content: flex-start;
     }
+  }
+
+  .recommend-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .recommend-alert {
+    margin-bottom: 0;
+  }
+
+  .recommend-desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
+  }
+
+  .reports-select-card .settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .reports-select-card .model-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .reports-select-card .model-label {
+    width: 72px;
+    font-size: 13px;
+    color: var(--el-text-color-regular);
+  }
+
+  .reports-select-card .model-control {
+    flex: 1;
+  }
+
+  .reports-select-card .model-select {
+    width: 260px;
+  }
+
+  .reports-filters {
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .reports-filters .filter-item {
+    width: 220px;
+  }
+
+  .reports-select-card .collapse-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--el-text-color-regular);
+  }
+
+  .reports-select-card .count-text {
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+  }
+
+  .reports-select-card .generate-row {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .recommend-result-card .card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .recommend-result-card .card-header .sub-text {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
+
+  .overall-comment {
+    margin-bottom: 12px;
+  }
+
+  .overall-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .overall-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
+    white-space: pre-wrap;
+  }
+
+  .evaluation-summary {
+    margin-bottom: 12px;
+  }
+
+  .evaluation-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .evaluation-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
+    white-space: pre-wrap;
+  }
+
+  .recommend-detail-card {
+    margin-top: 12px;
+  }
+
+  .detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .detail-title {
+    font-weight: 500;
+  }
+
+  .detail-name {
+    margin-left: 4px;
+    color: var(--el-text-color-secondary);
+    font-weight: normal;
+  }
+
+  .detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .detail-section-title {
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .detail-section-content {
+    white-space: pre-wrap;
+  }
+
+  .text-muted {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
   }
 }
 </style>

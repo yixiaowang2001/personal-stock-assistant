@@ -95,9 +95,44 @@ class UnifiedConfigManager:
         return self._load_json_file(self.paths.models_json, "models")
     
     def get_llm_configs(self) -> List[LLMConfig]:
-        """获取标准化的LLM配置"""
+        """获取标准化的LLM配置
+
+        优先从 MongoDB 的 system_configs.llm_configs 中读取（与配置管理界面保持一致），
+        如果数据库中没有配置或读取失败，则回退到 legacy models.json。
+        """
+        # 优先从数据库读取与前端配置管理一致的 LLM 配置
+        try:
+            from app.core.database import get_mongo_db_sync
+
+            db = get_mongo_db_sync()
+            config_collection = db.system_configs
+            config_data = config_collection.find_one(
+                {"is_active": True},
+                sort=[("version", -1)],
+            )
+
+            if config_data and config_data.get("llm_configs"):
+                llm_configs_data = config_data.get("llm_configs", [])
+                result: List[LLMConfig] = []
+                for item in llm_configs_data:
+                    try:
+                        result.append(LLMConfig(**item))
+                    except Exception as e:
+                        print(f"⚠️ [unified_config] 解析 LLM 配置失败: {e}, 配置: {item}")
+                        continue
+
+                if result:
+                    return result
+                else:
+                    print("⚠️ [unified_config] 数据库中的 llm_configs 为空列表，将回退到 legacy models.json")
+            else:
+                print("⚠️ [unified_config] 数据库中没有 llm_configs 字段，将回退到 legacy models.json")
+        except Exception as e:
+            print(f"⚠️ [unified_config] 从数据库读取 LLM 配置失败，将回退到 legacy models.json: {e}")
+
+        # 回退：从传统的 models.json 中加载配置
         legacy_models = self.get_legacy_models()
-        llm_configs = []
+        llm_configs: List[LLMConfig] = []
 
         for model in legacy_models:
             try:
@@ -113,7 +148,7 @@ class UnifiedConfigManager:
                     max_tokens=model.get("max_tokens", 4000),
                     temperature=model.get("temperature", 0.7),
                     enabled=model.get("enabled", True),
-                    description=f"{model.get('provider', '')} {model.get('model_name', '')}"
+                    description=f"{model.get('provider', '')} {model.get('model_name', '')}",
                 )
                 llm_configs.append(llm_config)
             except Exception as e:
