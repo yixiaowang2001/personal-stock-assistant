@@ -10,6 +10,12 @@ export interface PortfolioRecommendationItem {
   current_shares?: number | null
   current_value?: number | null
 
+   // 报告中解析出的行情信息
+  quote_price?: number | null
+  quote_change?: number | null
+  quote_change_percent?: number | null
+  quote_volume?: number | null
+
   target_allocation?: number | null
   suggested_shares?: number | null
 

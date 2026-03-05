@@ -439,7 +439,26 @@
                       <span v-else-if="row.currentPosition">
                         {{ currencySymbol }}{{ formatPrice(row.currentPosition.mark_price) }}
                       </span>
+                      <span v-else-if="row.report_price != null">
+                        {{ currencySymbol }}{{ formatPrice(row.report_price) }}
+                      </span>
                       <span v-else class="text-muted">待补充价格</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="涨跌幅" width="140" align="right">
+                    <template #default="{ row }">
+                      <span v-if="formatReportChange(row)">
+                        {{ formatReportChange(row) }}
+                      </span>
+                      <span v-else class="text-muted">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="成交量" width="120" align="right">
+                    <template #default="{ row }">
+                      <span v-if="row.report_volume != null">
+                        {{ formatVolume(row.report_volume) }}
+                      </span>
+                      <span v-else class="text-muted">-</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="操作建议" width="140">
@@ -494,7 +513,30 @@
                           <span v-else-if="activeRecommendation.currentPosition">
                             {{ currencySymbol }}{{ formatPrice(activeRecommendation.currentPosition.mark_price) }}
                           </span>
+                          <span v-else-if="activeRecommendation.report_price != null">
+                            {{ currencySymbol }}{{ formatPrice(activeRecommendation.report_price) }}
+                          </span>
                           <span v-else class="text-muted">暂无价格信息</span>
+                        </div>
+                      </div>
+                      <div class="detail-section">
+                        <div class="detail-section-title">报告行情信息</div>
+                        <div class="detail-section-content">
+                          <div v-if="activeRecommendation.report_price != null">
+                            报告价格：{{ currencySymbol }}{{ formatPrice(activeRecommendation.report_price) }}
+                          </div>
+                          <div v-if="formatReportChange(activeRecommendation)">
+                            涨跌幅：{{ formatReportChange(activeRecommendation) }}
+                          </div>
+                          <div v-if="activeRecommendation.report_volume != null">
+                            成交量：{{ formatVolume(activeRecommendation.report_volume) }}
+                          </div>
+                          <span
+                            v-if="!activeRecommendation.report_price && !formatReportChange(activeRecommendation) && !activeRecommendation.report_volume"
+                            class="text-muted"
+                          >
+                            暂无报告行情信息
+                          </span>
                         </div>
                       </div>
                       <div class="detail-section">
@@ -692,6 +734,10 @@ const recommendationRows = computed(() => {
         item.suggested_trade_shares ?? item.suggested_shares ?? null,
       rationale: item.rationale ?? item.reason,
       risk_note: item.risk_note ?? item.risk,
+      report_price: item.quote_price ?? null,
+      report_change: item.quote_change ?? null,
+      report_change_percent: item.quote_change_percent ?? null,
+      report_volume: item.quote_volume ?? null,
       currentPosition: bySymbol[symbol] || null,
     }
   })
@@ -1095,6 +1141,32 @@ function formatTradeQuantity(n: number | undefined) {
   if (n == null || Number.isNaN(n)) return '-'
   const num = Math.abs(Number(n))
   return Number.isInteger(num) ? String(num) : num.toFixed(2)
+}
+
+function formatVolume(v: number | null | undefined) {
+  if (v == null || Number.isNaN(v)) return '-'
+  const n = Math.abs(Number(v))
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(1)}M`
+  }
+  if (n >= 1_000) {
+    return `${(n / 1_000).toFixed(1)}K`
+  }
+  return String(Math.round(n))
+}
+
+function formatReportChange(row: any) {
+  const abs = row?.report_change
+  const pct = row?.report_change_percent
+  const hasAbs = typeof abs === 'number' && !Number.isNaN(abs)
+  const hasPct = typeof pct === 'number' && !Number.isNaN(pct)
+  if (!hasAbs && !hasPct) return ''
+  const signAbs = hasAbs ? (abs >= 0 ? '+' : '') + abs.toFixed(2) : ''
+  const signPct = hasPct ? (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%' : ''
+  if (hasAbs && hasPct) {
+    return `${signAbs} (${signPct})`
+  }
+  return hasAbs ? signAbs : signPct
 }
 
 function viewStock(symbol: string) {

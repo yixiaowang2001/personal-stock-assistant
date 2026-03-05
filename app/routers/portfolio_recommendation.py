@@ -56,6 +56,12 @@ class PortfolioRecommendationItem(BaseModel):
   current_shares: Optional[float] = None
   current_value: Optional[float] = None
 
+  # 报告中解析出的行情信息（价格、涨跌幅、成交量等）
+  quote_price: Optional[float] = None
+  quote_change: Optional[float] = None
+  quote_change_percent: Optional[float] = None
+  quote_volume: Optional[float] = None
+
   # 目标仓位与建议股数（target_allocation 基于调整后总资产）
   target_allocation: Optional[float] = None
   suggested_shares: Optional[float] = None  # >0 买入股数，<0 卖出股数
@@ -169,29 +175,85 @@ async def _load_reports(report_ids: List[str]) -> List[Dict[str, Any]]:
 
 def _extract_price_from_report_doc(doc: Dict[str, Any]) -> Optional[float]:
   """
-  从报告文档中提取参考价格。
-
-  优先使用结构化字段 current_price/report_price；
-  若缺失，则尝试从 reports 文本中的“当前价格”段落里解析数字。
+  兼容旧接口：仅从报告中提取参考价格。
   """
+  quote = _extract_quote_from_report_doc(doc)
+  if not quote:
+    return None
+  return quote.get("price")
+
+
+def _extract_quote_from_report_doc(
+  doc: Dict[str, Any],
+) -> Optional[Dict[str, Optional[float]]]:
+  """
+  从报告文档中提取行情信息（价格、涨跌幅、成交量）。
+
+  优先使用结构化字段 current_price/report_price/price_change 等；
+  若缺失，则尝试从 reports 文本中的“当前价格/涨跌幅/成交量”段落里解析数字。
+  """
+  price: Optional[float] = None
+  change: Optional[float] = None
+  change_percent: Optional[float] = None
+  volume: Optional[float] = None
+
   # 1）结构化字段
-  rp = doc.get("current_price")
-  if isinstance(rp, (int, float)):
-    try:
-      return float(rp)
-    except Exception:
-      pass
+  for val in [
+    doc.get("current_price"),
+    doc.get("report_price"),
+  ]:
+    if isinstance(val, (int, float)):
+      try:
+        price = float(val)
+        break
+      except Exception:
+        continue
 
-  rp2 = doc.get("report_price")
-  if isinstance(rp2, (int, float)):
-    try:
-      return float(rp2)
-    except Exception:
-      pass
+  for val in [
+    doc.get("price_change"),
+    doc.get("change"),
+  ]:
+    if isinstance(val, (int, float)):
+      try:
+        change = float(val)
+        break
+      except Exception:
+        continue
 
-  # 2）从文本块中解析 “当前价格：xxx”
+  for val in [
+    doc.get("price_change_percent"),
+    doc.get("pct_chg"),
+    doc.get("change_percent"),
+  ]:
+    if isinstance(val, (int, float)):
+      try:
+        change_percent = float(val)
+        break
+      except Exception:
+        continue
+
+  for val in [
+    doc.get("volume"),
+    doc.get("vol"),
+    doc.get("turnover_volume"),
+  ]:
+    if isinstance(val, (int, float)):
+      try:
+        volume = float(val)
+        break
+      except Exception:
+        continue
+
+  # 2）从文本块中解析 “当前价格/涨跌幅/成交量”
   reports_dict = doc.get("reports") or {}
   if not isinstance(reports_dict, dict):
+    if any(v is not None for v in [price, change, change_percent, volume]):
+      return {
+        "price": price,
+        "change": change,
+        "change_percent": change_percent,
+        "volume": volume,
+      }
     return None
 
   text_blocks: List[str] = []
@@ -207,30 +269,116 @@ def _extract_price_from_report_doc(doc: Dict[str, Any]) -> Optional[float]:
     if isinstance(block, str) and block:
       text_blocks.append(block)
 
-  pattern = re.compile(r"当前价格[:：]\s*([+-]?\d+(?:\.\d+)?)")
+  # 允许在字段名和数值之间存在 Markdown 粗体标记、冒号、空格等非数字字符
+  price_pattern = re.compile(r"当前价格[^\d\r\n]{0,20}([+-]?\d+(?:\.\d+)?)")
+  # 同时包含绝对变动和百分比：涨跌幅：+16.74 (+12.18%)
+  change_both_pattern = re.compile(
+    r"涨跌幅[^\d\r\n]{0,20}([+-]?\d+(?:\.\d+)?)\s*\(\s*([+-]?\d+(?:\.\d+)?)\s*%\s*\)"
+  )
+  # 仅有百分比：涨跌幅：-19.35%
+  change_percent_pattern = re.compile(
+    r"涨跌幅[^\d\r\n]{0,20}([+-]?\d+(?:\.\d+)?)\s*%"
+  )
+  # 仅有绝对值（目前未观察到，但保留以兼容潜在格式）
+  change_pattern = re.compile(
+    r"涨跌幅[^\d\r\n]{0,20}([+-]?\d+(?:\.\d+)?)\b(?!\s*%)"
+  )
+  # 成交量：31,434,900 股
+  volume_pattern = re.compile(r"成交量[^\d\r\n]{0,20}([\d,]+)")
+
   # 先在优先模块中尝试
   for block in text_blocks:
-    try:
-      m = pattern.search(block)
-      if m:
-        value_str = m.group(1)
-        return float(value_str)
-    except Exception:
-      continue
+    if price is None:
+      try:
+        m = price_pattern.search(block)
+        if m:
+          value_str = m.group(1)
+          price = float(value_str)
+      except Exception:
+        pass
+
+    if change is None or change_percent is None:
+      try:
+        m_both = change_both_pattern.search(block)
+        if m_both:
+          abs_str = m_both.group(1)
+          pct_str = m_both.group(2)
+          change = float(abs_str)
+          change_percent = float(pct_str)
+        else:
+          if change is None:
+            m_abs = change_pattern.search(block)
+            if m_abs:
+              abs_str = m_abs.group(1)
+              change = float(abs_str)
+          if change_percent is None:
+            m_pct = change_percent_pattern.search(block)
+            if m_pct:
+              pct_str = m_pct.group(1)
+              change_percent = float(pct_str)
+      except Exception:
+        pass
+
+    if volume is None:
+      try:
+        m = volume_pattern.search(block)
+        if m:
+          vol_str = m.group(1).replace(",", "")
+          volume = float(vol_str)
+      except Exception:
+        pass
 
   # 若仍未找到，则在所有文本型 reports 字段中兜底搜索一次
   for block in reports_dict.values():
     if not isinstance(block, str) or not block:
       continue
+    if (
+      price is not None
+      and change is not None
+      and change_percent is not None
+      and volume is not None
+    ):
+      break
     try:
-      m = pattern.search(block)
-      if m:
-        value_str = m.group(1)
-        return float(value_str)
+      if price is None:
+        m_price = price_pattern.search(block)
+        if m_price:
+          value_str = m_price.group(1)
+          price = float(value_str)
+      if change is None or change_percent is None:
+        m_both = change_both_pattern.search(block)
+        if m_both:
+          abs_str = m_both.group(1)
+          pct_str = m_both.group(2)
+          change = float(abs_str)
+          change_percent = float(pct_str)
+        else:
+          if change is None:
+            m_abs = change_pattern.search(block)
+            if m_abs:
+              abs_str = m_abs.group(1)
+              change = float(abs_str)
+          if change_percent is None:
+            m_pct = change_percent_pattern.search(block)
+            if m_pct:
+              pct_str = m_pct.group(1)
+              change_percent = float(pct_str)
+      if volume is None:
+        m_vol = volume_pattern.search(block)
+        if m_vol:
+          vol_str = m_vol.group(1).replace(",", "")
+          volume = float(vol_str)
     except Exception:
       continue
 
-  return None
+  if all(v is None for v in [price, change, change_percent, volume]):
+    return None
+  return {
+    "price": price,
+    "change": change,
+    "change_percent": change_percent,
+    "volume": volume,
+  }
 
 
 def _ensure_unique_symbol_map(reports: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -844,6 +992,7 @@ def _build_recommendations_from_reports(
       if isinstance(position_value_raw, (int, float))
       else None
     )
+    quote: Optional[Dict[str, Optional[float]]] = _extract_quote_from_report_doc(doc)
     price: Optional[float] = None
     if isinstance(mark_price, (int, float)):
       price = float(mark_price)
@@ -860,6 +1009,10 @@ def _build_recommendations_from_reports(
       current_price=price,
       current_shares=quantity if has_position else None,
       current_value=position_value if has_position else None,
+      quote_price=quote.get("price") if quote else None,
+      quote_change=quote.get("change") if quote else None,
+      quote_change_percent=quote.get("change_percent") if quote else None,
+      quote_volume=quote.get("volume") if quote else None,
       target_allocation=None,
       suggested_shares=None,
       reason=rationale,
@@ -967,11 +1120,13 @@ def _build_payload_from_llm(
       if any(k in action_lower for k in ["exit", "close", "清仓", "sell all"]) and target_allocation != 0.0:
         target_allocation = 0.0
 
-    # 从报告中尝试获取参考价格（结构化字段或“当前价格：xxx”文本）
+    # 从报告中尝试获取参考价格（结构化字段或“当前价格：xxx”文本），以及其他行情信息
     report_price = None
+    quote_info: Optional[Dict[str, Optional[float]]] = None
     doc = by_symbol.get(ticker_str)
     if doc:
-      report_price = _extract_price_from_report_doc(doc)
+      quote_info = _extract_quote_from_report_doc(doc) or {}
+      report_price = quote_info.get("price")
 
     parsed_suggestions.append(
       {
@@ -1049,6 +1204,17 @@ def _build_payload_from_llm(
 
   items: List[PortfolioRecommendationItem] = []
   for r in trades_result["stock_results"]:
+    quote: Optional[Dict[str, Optional[float]]] = None
+    ticker_val = r.get("ticker")
+    if ticker_val is not None:
+      ticker_str = str(ticker_val)
+      doc = by_symbol.get(ticker_str)
+      if doc:
+        try:
+          quote = _extract_quote_from_report_doc(doc)
+        except Exception:
+          quote = None
+
     item = PortfolioRecommendationItem(
       ticker=r["ticker"],
       name=r.get("name"),
@@ -1056,6 +1222,10 @@ def _build_payload_from_llm(
       current_price=r.get("current_price"),
       current_shares=r.get("current_shares"),
       current_value=r.get("current_value"),
+      quote_price=quote.get("price") if quote else None,
+      quote_change=quote.get("change") if quote else None,
+      quote_change_percent=quote.get("change_percent") if quote else None,
+      quote_volume=quote.get("volume") if quote else None,
       target_allocation=r.get("target_allocation"),
       suggested_shares=r.get("suggested_shares"),
       reason=r.get("reason"),
