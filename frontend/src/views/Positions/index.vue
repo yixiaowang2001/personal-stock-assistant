@@ -249,10 +249,19 @@
                   <el-collapse-item name="reports">
                     <template #title>
                       <div class="collapse-header">
-                        <span>选择报告（可选，最多 10 份，以下仅展示已完成的单股分析报告）</span>
-                        <span class="count-text">已选 {{ selectedReports.length }} / 10</span>
+                        <span>选择报告（可选报告最多 10 份，以下仅展示已完成的单股分析报告）</span>
+                        <span class="count-text">可选已选 {{ selectedReports.length }} / 10</span>
                       </div>
                     </template>
+
+                <div
+                  v-if="positionsMissingReports.length > 0"
+                  class="report-warning"
+                >
+                  部分持仓暂未找到对应的个股报告（例如：
+                  {{ positionsMissingReports.map((p) => p.symbol).join('、') }}），
+                  本次持仓推荐结果可能不够准确，建议补齐相关报告后再生成。
+                </div>
 
                 <div class="reports-filters">
                   <el-button
@@ -291,14 +300,14 @@
 
                     <el-table
                       ref="reportTableRef"
-                      :data="filteredReports"
+                      :data="optionalReportsForTable"
                       v-loading="reportsLoading"
                       style="width: 100%;"
                       size="small"
                       @select="onReportRowSelect"
                       @selection-change="onReportSelectionChange"
                     >
-                      <el-table-column type="selection" width="50" />
+                      <el-table-column type="selection" width="50" :selectable="isReportRowSelectable" />
                       <el-table-column prop="stock_code" label="代码" width="110">
                         <template #default="{ row }">
                           <span>{{ row.stock_code }}</span>
@@ -350,7 +359,7 @@
                 <div class="generate-row">
                   <el-button
                     type="primary"
-                    :disabled="selectedReports.length === 0 || generating"
+                    :disabled="allReportIdsForSubmit.length === 0 || generating"
                     :loading="generating"
                     @click="onGenerateRecommendations"
                   >
@@ -378,17 +387,30 @@
                 <el-empty description="请选择上方报告并点击“生成推荐”获取结果" />
               </div>
               <div v-else>
-                <div v-if="recommendationResult.overall_comment" class="overall-comment">
+                <div v-if="overallAnalysis" class="overall-comment">
                   <div class="overall-title">组合层面说明</div>
                   <div class="overall-text">
-                    {{ recommendationResult.overall_comment }}
+                    {{ overallAnalysis }}
                   </div>
                 </div>
 
-                <div v-if="recommendationResult.evaluation_summary" class="evaluation-summary">
-                  <div class="evaluation-title">综合评估建议</div>
+                <div v-if="sectorAdviceText" class="evaluation-summary">
+                  <div class="evaluation-title">行业配置建议</div>
                   <div class="evaluation-text">
-                    {{ recommendationResult.evaluation_summary }}
+                    {{ sectorAdviceText }}
+                  </div>
+                </div>
+
+                <div v-if="cashAllocationValue != null" class="cash-config">
+                  <div class="cash-title">现金配置</div>
+                  <div class="cash-text">
+                    现金配置：{{ (cashAllocationValue * 100).toFixed(1) }}%
+                    <template v-if="cashReasonText">
+                      ，{{ cashReasonText }}
+                    </template>
+                    <template v-else>
+                      ，用于应对市场波动和等待新机会（自动推算）
+                    </template>
                   </div>
                 </div>
 
@@ -407,6 +429,17 @@
                         {{ currencySymbol }}{{ formatAmount(row.currentPosition.position_value) }}
                       </span>
                       <span v-else class="text-muted">当前无持仓</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="当前价" width="110" align="right">
+                    <template #default="{ row }">
+                      <span v-if="row.current_price != null">
+                        {{ currencySymbol }}{{ formatPrice(row.current_price) }}
+                      </span>
+                      <span v-else-if="row.currentPosition">
+                        {{ currencySymbol }}{{ formatPrice(row.currentPosition.mark_price) }}
+                      </span>
+                      <span v-else class="text-muted">待补充价格</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="操作建议" width="140">
@@ -453,6 +486,18 @@
                     </template>
                     <div class="detail-body">
                       <div class="detail-section">
+                        <div class="detail-section-title">当前价格（参考）</div>
+                        <div class="detail-section-content">
+                          <span v-if="activeRecommendation.current_price != null">
+                            {{ currencySymbol }}{{ formatPrice(activeRecommendation.current_price) }}
+                          </span>
+                          <span v-else-if="activeRecommendation.currentPosition">
+                            {{ currencySymbol }}{{ formatPrice(activeRecommendation.currentPosition.mark_price) }}
+                          </span>
+                          <span v-else class="text-muted">暂无价格信息</span>
+                        </div>
+                      </div>
+                      <div class="detail-section">
                         <div class="detail-section-title">操作原因</div>
                         <div class="detail-section-content">
                           <span v-if="activeRecommendation.rationale">
@@ -483,7 +528,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { TrendCharts, Refresh } from '@element-plus/icons-vue'
@@ -553,6 +598,31 @@ const reportsLoaded = ref(false)
 const reportsCollapseActive = ref<string[]>(['reports'])
 const filterTodayOnly = ref(false)
 
+// 持仓对应报告（自动选择，不占 10 个名额，不可取消）
+const positionReports = ref<any[]>([])
+const positionReportsLoading = ref(false)
+const positionReportIds = computed(() => positionReports.value.map((r: any) => r.id).filter(Boolean))
+
+// 持仓中缺少对应报告的股票列表（用于提示）
+const positionsMissingReports = computed(() => {
+  const pos = positions.value || []
+  if (!pos.length) return []
+  const haveSymbols = new Set(
+    positionReports.value
+      .map((r: any) => r.stock_code || r.stock_symbol)
+      .filter(Boolean),
+  )
+  const missing: { symbol: string; name: string }[] = []
+  for (const p of pos as any[]) {
+    const symbol = p?.symbol
+    if (!symbol) continue
+    if (haveSymbols.has(symbol)) continue
+    const name = p.description || p.localSymbol || ''
+    missing.push({ symbol, name })
+  }
+  return missing
+})
+
 // 持仓推荐：模型选择
 const availableModels = ref<any[]>([])
 const selectedModel = ref<string>('')
@@ -562,6 +632,45 @@ const generating = ref(false)
 const recommendationResult = ref<any | null>(null)
 const activeRecommendation = ref<any | null>(null)
 
+const overallAnalysis = computed(() => {
+  if (!recommendationResult.value) return ''
+  return recommendationResult.value.analysis || recommendationResult.value.overall_comment || ''
+})
+
+const sectorAdviceText = computed(() => {
+  if (!recommendationResult.value) return ''
+  return recommendationResult.value.sector_advice || recommendationResult.value.evaluation_summary || ''
+})
+
+const stockAllocationSum = computed(() => {
+  if (!recommendationResult.value) return 0
+  return recommendationRows.value.reduce((sum, row: any) => {
+    const v = row.target_position_percent
+    if (typeof v === 'number' && !Number.isNaN(v)) {
+      return sum + v
+    }
+    return sum
+  }, 0)
+})
+
+const cashAllocationValue = computed(() => {
+  if (!recommendationResult.value) return null
+  const explicit = recommendationResult.value.cash_allocation
+  if (typeof explicit === 'number' && !Number.isNaN(explicit)) {
+    return explicit
+  }
+  const sum = stockAllocationSum.value
+  if (sum >= 0 && sum <= 1.05) {
+    return Math.max(0, 1 - sum)
+  }
+  return null
+})
+
+const cashReasonText = computed(() => {
+  if (!recommendationResult.value) return ''
+  return recommendationResult.value.cash_reason || ''
+})
+
 const recommendationRows = computed(() => {
   if (!recommendationResult.value) return []
   const bySymbol: Record<string, any> = {}
@@ -570,10 +679,19 @@ const recommendationRows = computed(() => {
       bySymbol[p.symbol] = p
     }
   }
-  return (recommendationResult.value.recommendations || []).map((item: any) => {
-    const symbol = item.stock_symbol
+  const sourceItems = recommendationResult.value.items || recommendationResult.value.recommendations || []
+  return (sourceItems as any[]).map((item: any) => {
+    const symbol = item.ticker || item.stock_symbol
     return {
       ...item,
+      stock_symbol: symbol,
+      stock_name: item.stock_name ?? item.name,
+      target_position_percent:
+        item.target_position_percent ?? item.target_allocation ?? null,
+      suggested_trade_shares:
+        item.suggested_trade_shares ?? item.suggested_shares ?? null,
+      rationale: item.rationale ?? item.reason,
+      risk_note: item.risk_note ?? item.risk,
       currentPosition: bySymbol[symbol] || null,
     }
   })
@@ -600,6 +718,28 @@ const filteredReports = computed(() => {
       return false
     }
   })
+})
+
+// 报告表格数据（含持仓对应报告）
+const optionalReportsForTable = computed(() => {
+  return filteredReports.value
+})
+
+// 自动选中的持仓对应报告 ID 集合
+const autoSelectedReportIdSet = computed(() => {
+  return new Set(positionReportIds.value.map((id: any) => String(id)))
+})
+
+// 提交时使用的全部报告 ID（持仓报告 + 可选报告，去重）
+const allReportIdsForSubmit = computed(() => {
+  const ids = new Set<string>()
+  for (const id of positionReportIds.value) {
+    if (id) ids.add(String(id))
+  }
+  for (const r of selectedReports.value) {
+    if (r?.id) ids.add(String(r.id))
+  }
+  return Array.from(ids)
 })
 
 const displayModelName = computed(() => {
@@ -658,6 +798,49 @@ async function fetchCompletedReports() {
   }
 }
 
+async function fetchPositionReports() {
+  const pos = positions.value
+  if (!pos?.length) {
+    positionReports.value = []
+    return
+  }
+  const symbols = [...new Set(pos.map((p: any) => p?.symbol).filter(Boolean))]
+  if (!symbols.length) {
+    positionReports.value = []
+    return
+  }
+  try {
+    positionReportsLoading.value = true
+    const results: any[] = []
+    await Promise.all(
+      symbols.map(async (symbol: string) => {
+        const params = new URLSearchParams({
+          stock_code: symbol,
+          page: '1',
+          page_size: '5',
+        })
+        const response = await fetch(`/api/reports/list?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${authStore.token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        if (!response.ok) return
+        const result = await response.json()
+        if (result?.success && Array.isArray(result.data?.reports) && result.data.reports.length > 0) {
+          const completed = result.data.reports.find((r: any) => r.status === 'completed')
+          if (completed) results.push(completed)
+        }
+      }),
+    )
+    positionReports.value = results
+  } catch {
+    positionReports.value = []
+  } finally {
+    positionReportsLoading.value = false
+  }
+}
+
 function onReportFilterChange() {
   reportPage.value = 1
   fetchCompletedReports()
@@ -679,17 +862,55 @@ function onToggleTodayFilter() {
 }
 
 function onReportSelectionChange(selection: any[]) {
-  selectedReports.value = selection
+  // 选择变更由 onReportRowSelect 基于行级别事件维护 selectedReports
+  // 这里不做额外处理，避免分页或程序性切换时清空已选状态
 }
 
 function onReportRowSelect(selection: any[], row: any) {
-  const isSelected = selection.some((item) => item.id === row.id)
-  if (!isSelected) {
-    selectedReports.value = selection
+  const autoSet = autoSelectedReportIdSet.value
+  if (!row || !row.id) return
+  const idStr = String(row.id)
+  if (autoSet.has(idStr)) return
+
+  const nowSelected = selection.some(
+    (item) => item && String(item.id) === idStr && !autoSet.has(String(item.id)),
+  )
+
+  const symbol = row.stock_code || row.stock_symbol
+
+  // 当前已在选中列表中的条目
+  const existedSameId = selectedReports.value.some(
+    (item: any) => String(item.id) === idStr,
+  )
+
+  // 处理“取消选择”：从全局已选中移除
+  if (!nowSelected) {
+    if (existedSameId) {
+      selectedReports.value = selectedReports.value.filter(
+        (item: any) => String(item.id) !== idStr,
+      )
+    }
     return
   }
 
-  if (selection.length > 10) {
+  // 下面是“勾选”逻辑
+  const existedSameSymbol =
+    symbol &&
+    selectedReports.value.find(
+      (item: any) =>
+        (item.stock_code || item.stock_symbol) === symbol &&
+        String(item.id) !== idStr,
+    )
+
+  if (existedSameSymbol) {
+    ElMessage.warning('同一股票代码只能选择一份报告')
+    if (reportTableRef.value) {
+      reportTableRef.value.toggleRowSelection(row, false)
+    }
+    return
+  }
+
+  if (!existedSameId && selectedReports.value.length >= 10) {
     ElMessage.warning('最多只能选择 10 份报告')
     if (reportTableRef.value) {
       reportTableRef.value.toggleRowSelection(row, false)
@@ -697,23 +918,47 @@ function onReportRowSelect(selection: any[], row: any) {
     return
   }
 
-  const symbol = row.stock_code || row.stock_symbol
-  if (symbol) {
-    const hasDuplicate = selection.some(
-      (item) =>
-        (item.stock_code || item.stock_symbol) === symbol && item.id !== row.id,
+  if (!existedSameId) {
+    selectedReports.value = [...selectedReports.value, row]
+  }
+}
+
+function isReportRowSelectable(row: any) {
+  const autoSet = autoSelectedReportIdSet.value
+  if (!row || !row.id) return true
+  return !autoSet.has(String(row.id))
+}
+
+function syncReportSelections() {
+  const table = reportTableRef.value
+  if (!table) return
+  const autoSet = autoSelectedReportIdSet.value
+  const currentSelection: any[] = table.getSelectionRows ? table.getSelectionRows() : []
+  const currentIds = new Set(currentSelection.map((item: any) => String(item.id)))
+  for (const row of optionalReportsForTable.value) {
+    if (!row || !row.id) continue
+    const idStr = String(row.id)
+    const manualSelected = selectedReports.value.some(
+      (item: any) => String(item.id) === idStr,
     )
-    if (hasDuplicate) {
-      ElMessage.warning('同一股票代码只能选择一份报告')
-      if (reportTableRef.value) {
-        reportTableRef.value.toggleRowSelection(row, false)
-      }
-      return
+    const shouldSelect = autoSet.has(idStr) || manualSelected
+    const isSelected = currentIds.has(idStr)
+    if (shouldSelect && !isSelected) {
+      table.toggleRowSelection(row, true)
+    } else if (!shouldSelect && isSelected && !autoSet.has(idStr)) {
+      table.toggleRowSelection(row, false)
     }
   }
-
-  selectedReports.value = selection
 }
+
+watch(
+  () => [optionalReportsForTable.value, positionReportIds.value],
+  () => {
+    nextTick(() => {
+      syncReportSelections()
+    })
+  },
+)
 
 function formatReportTime(time: string | null | undefined) {
   if (!time) return '-'
@@ -769,14 +1014,9 @@ function getCapabilityTagType(level: number): 'success' | 'info' | 'warning' | '
 }
 
 async function onGenerateRecommendations() {
-  if (!selectedReports.value.length) {
-    ElMessage.warning('请先选择至少 1 份报告')
-    return
-  }
-
-  const ids = selectedReports.value.map((r: any) => r.id).filter(Boolean)
+  const ids = allReportIdsForSubmit.value
   if (!ids.length) {
-    ElMessage.error('选中的报告缺少有效 ID')
+    ElMessage.warning('请至少保留或选择 1 份报告（持仓对应报告已自动计入）')
     return
   }
 
@@ -806,6 +1046,9 @@ watch(
     }
     if (val === 'recommend' && !modelsLoaded.value) {
       initializePortfolioModels()
+    }
+    if (val === 'recommend' && snapshot.value?.positions?.length) {
+      fetchPositionReports()
     }
   },
 )
@@ -1112,6 +1355,57 @@ onMounted(() => {
     line-height: 1.6;
     color: var(--el-text-color-regular);
     white-space: pre-wrap;
+  }
+
+  .cash-config {
+    margin-bottom: 12px;
+  }
+
+  .cash-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .cash-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
+    white-space: pre-wrap;
+  }
+
+  .position-reports-block {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: var(--el-fill-color-light);
+    border-radius: 4px;
+  }
+
+  .position-reports-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--el-text-color-regular);
+  }
+
+  .position-reports-list {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
+  }
+
+  .position-report-item {
+    display: block;
+  }
+
+  .report-warning {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    border-radius: 4px;
+    background-color: var(--el-color-warning-light-9);
+    color: var(--el-color-warning-dark-2);
   }
 
   .recommend-detail-card {

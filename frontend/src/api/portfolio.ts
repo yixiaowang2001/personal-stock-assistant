@@ -2,24 +2,34 @@ import { ApiClient } from './request'
 import type { IbkrPosition } from './ibkr'
 
 export interface PortfolioRecommendationItem {
-  stock_symbol: string
-  stock_name?: string | null
+  ticker: string
+  name?: string | null
   action: string
-  target_position_percent?: number | null
-  suggested_trade_shares?: number | null
-  rationale?: string | null
-  risk_note?: string | null
+
+  current_price?: number | null
+  current_shares?: number | null
+  current_value?: number | null
+
+  target_allocation?: number | null
+  suggested_shares?: number | null
+
+  reason?: string | null
+  risk?: string | null
 }
 
 export interface PortfolioRecommendationData {
   base_currency: string | null
-  cash: number | null
   as_of_date: string | null
-  positions: IbkrPosition[]
-  overall_comment?: string | null
-  evaluation_summary?: string | null
-  recommendations: PortfolioRecommendationItem[]
+  total_value: number | null
+  cash_before: number | null
+  cash_after: number | null
+  cash_allocation?: number | null
+  cash_reason?: string | null
+  analysis?: string | null
+  sector_advice?: string | null
+  items: PortfolioRecommendationItem[]
   used_model?: string | null
+  mode?: 'llm' | 'rule_fallback' | string | null
 }
 
 export const portfolioApi = {
